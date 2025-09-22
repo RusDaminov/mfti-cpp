@@ -1,0 +1,7 @@
+---
+: '3'
+
+services:
+  exercises:
+    volumes:
+      - .:/exercises-cpp
