@@ -1,25 +1,19 @@
 #include <iostream>
-#include <iomanip>
+#include <unordered_set>
+#include <string>
 using namespace std;
 
+
 int main() {
-    string name;
-    int age;
-    double average_score;
-    
-    cout << "Введите ваше имя: ";
-    cin >> name;
-    
-    cout << "Введите ваш возраст: ";
-    cin >> age;
-    
-    cout << "Введите ваш средний балл: ";
-    cin >> average_score;
-    
-    cout << "Имя: " << name << endl;
-    cout << "Возраст: " << age << endl;
-    cout << fixed << setprecision(2);
-    cout << "Средний балл: " << average_score << endl;
-    
+    string s;
+    cin >> s;
+    unordered_set<string> substrings;
+    int n = s.size();
+    for (int len = 1; len <= n; ++len) {
+        for (int i = 0; i + len <= n; ++i) {
+            substrings.insert(s.substr(i, len));
+        }
+    }
+    cout << substrings.size() << endl;
     return 0;
 }

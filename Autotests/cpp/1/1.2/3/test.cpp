@@ -1,91 +1,62 @@
 #include <iostream>
-#include <sstream>
+#include <fstream>
 #include <string>
-#include <iomanip>
-
+#include <cstdlib>
 using namespace std;
 
-void testMultiTypeProgram() {
-    struct TestData {
-        string testName;
-        int intVal;
-        double doubleVal;
-        bool boolVal;
-    };
-    
-    TestData testCases[] = {
-        {"Тест 1: Положительные значения", 42, 3.14159, true},
-        {"Тест 2: Отрицательные значения", -15, -2.5, false},
-        {"Тест 3: Нулевые значения", 0, 0.0, false},
-        {"Тест 4: Большие числа", 1000000, 12345.6789, true},
-        {"Тест 5: Дробное округление", 1, 9.999, true}
-    };
-    
-    cout << "Запуск тестов программы с разными типами данных\n";
-    cout << "==============================================\n";
-    
-    for (const auto& test : testCases) {
-        // Сохраняем оригинальные потоки
-        streambuf* origCin = cin.rdbuf();
-        streambuf* origCout = cout.rdbuf();
-        
-        // Настраиваем тестовые потоки
-        stringstream inputStream;
-        inputStream << test.intVal << "\n" << test.doubleVal << "\n" << test.boolVal << "\n";
-        
-        ostringstream outputStream;
-        
-        cin.rdbuf(inputStream.rdbuf());
-        cout.rdbuf(outputStream.rdbuf());
-        
-        // Запускаем программу
-        int integer;
-        double floating;
-        bool logical;
-        
-        cout << "Введите целое число: ";
-        cin >> integer;
-        
-        cout << "Введите вещественное число: ";
-        cin >> floating;
-        
-        cout << "Введите логическое значение (0/1): ";
-        cin >> logical;
-        
-        cout << "Целое: " << integer << endl;
-        cout << "Вещественное: " << fixed << setprecision(2) << floating << endl;
-        cout << "Логическое: " << (logical ? "true" : "false") << endl;
-        
-        // Получаем вывод
-        string result = outputStream.str();
-        
-        // Восстанавливаем потоки
-        cin.rdbuf(origCin);
-        cout.rdbuf(origCout);
-        
-        // Проверяем корректность
-        bool intCorrect = (integer == test.intVal);
-        bool doubleCorrect = (floating == test.doubleVal);
-        bool boolCorrect = (logical == test.boolVal);
-        
-        if (intCorrect && doubleCorrect && boolCorrect) {
-            cout << "✓ " << test.testName << " - пройден" << endl;
-            cout << "  Результат: " << integer << ", " << fixed << setprecision(2) << floating 
-                 << ", " << (logical ? "true" : "false") << endl;
-        } else {
-            cout << "✗ " << test.testName << " - провален" << endl;
-            cout << "  Ожидалось: " << test.intVal << ", " << test.doubleVal 
-                 << ", " << (test.boolVal ? "true" : "false") << endl;
-            cout << "  Получено: " << integer << ", " << floating 
-                 << ", " << (logical ? "true" : "false") << endl;
-        }
+bool run_test(const string& input, const string& expected) {
+    ofstream infile("input.txt");
+    infile << input;
+    infile.close();
+
+    int compile_status = system("g++ -std=c++11 main.cpp -o student_program -w");
+    if (compile_status != 0) {
+        cerr << "Ошибка компиляции!" << endl;
+        return false;
     }
-    
-    cout << "==============================================\n";
-    cout << "Тестирование завершено!\n";
+
+    int run_status = system("./student_program < input.txt > output.txt");
+    if (run_status != 0) {
+        cerr << "Ошибка при выполнении программы!" << endl;
+        return false;
+    }
+
+    ifstream outfile("output.txt");
+    string output, line;
+    while (getline(outfile, line)) {
+        if (!output.empty()) output += "\n";
+        output += line;
+    }
+    outfile.close();
+
+    if (output == expected) {
+        cout << "Тест пройден ✅" << endl;
+        return true;
+    } else {
+        cout << "Тест провален ❌" << endl;
+        cout << "Ожидалось:\n" << expected << endl;
+        cout << "Получено:\n" << output << endl;
+        return false;
+    }
 }
 
 int main() {
-    testMultiTypeProgram();
+    int passed = 0;
+
+    // Тест 1: обычные положительные числа и true
+    string input1 = "42\n3.1415\n1\n";
+    string expected1 =
+        "Введите целое число: Введите вещественное число: Введите логическое значение (0/1): "
+        "Целое: 42\nВещественное: 3.14\nЛогическое: true";
+    if (run_test(input1, expected1)) passed++;
+
+    // Тест 2: отрицательное целое, число с двумя знаками после запятой и false
+    string input2 = "-7\n2.5\n0\n";
+    string expected2 =
+        "Введите целое число: Введите вещественное число: Введите логическое значение (0/1): "
+        "Целое: -7\nВещественное: 2.50\nЛогическое: false";
+    if (run_test(input2, expected2)) passed++;
+
+    cout << "Пройдено " << passed << " тестов из 2" << endl;
     return 0;
 }

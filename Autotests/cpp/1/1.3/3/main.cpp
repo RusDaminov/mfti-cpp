@@ -1,13 +1,12 @@
 #include <iostream>
-#include <cmath> // для M_PI и pow
+#include <cmath>
 using namespace std;
 
-int main() {
-    double r = 3.0;
-    double V = (4.0 / 3.0) * M_PI * pow(r, 3);
-
-    cout.precision(15); // точность вывода
-    cout << "Объём шара: " << fixed << V << endl;
-
+int main(){
+    double r;
+    cout<<"Радиус шара ";
+    cin>>r;
+    double V = (4.0/3.0)*M_PI*pow(r, 3);
+    cout<<"Объем шара "<<V;
     return 0;
 }

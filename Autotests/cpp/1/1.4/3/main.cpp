@@ -1,27 +1,25 @@
 #include <iostream>
-using namespace std;
+#include <string>
 
 int main() {
     int x1, y1, x2, y2;
-    cin >> x1 >> y1 >> x2 >> y2;
+    std::cin >> x1 >> y1 >> x2 >> y2;
 
-    // Движение по оси X
+    std::string result;
+
     if (x2 > x1) {
-        for (int i = 0; i < x2 - x1; ++i)
-            cout << "E\n";
+        result += std::string(x2 - x1, 'E');
     } else {
-        for (int i = 0; i < x1 - x2; ++i)
-            cout << "W\n";
+        result += std::string(x1 - x2, 'W');
     }
 
-    // Движение по оси Y
     if (y2 > y1) {
-        for (int i = 0; i < y2 - y1; ++i)
-            cout << "N\n";
+        result += std::string(y2 - y1, 'N');
     } else {
-        for (int i = 0; i < y1 - y2; ++i)
-            cout << "S\n";
+        result += std::string(y1 - y2, 'S');
     }
+
+    std::cout << result << std::endl;
 
     return 0;
 }

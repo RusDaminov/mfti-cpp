@@ -1,117 +1,86 @@
 #include <iostream>
-#include <string>
+#include <fstream>
+#include <cassert>
 #include <cstdlib>
-
+#include <string>
 using namespace std;
 
-struct Timestamp {
-    int h, m, s;
-
-    Timestamp(int h_, int m_, int s_) : h(h_), m(m_), s(s_) {}
-
-    static Timestamp from_string(const string& str) {
-        int hh = stoi(str.substr(0, 2));
-        int mm = stoi(str.substr(3, 2));
-        int ss = stoi(str.substr(6, 2));
-        return Timestamp(hh, mm, ss);
-    }
-
-    int to_seconds() const {
-        return h * 3600 + m * 60 + s;
-    }
-
-    static Timestamp from_seconds(int total_seconds) {
-        total_seconds %= 86400;
-        if (total_seconds < 0) total_seconds += 86400;
-        int hh = total_seconds / 3600;
-        total_seconds %= 3600;
-        int mm = total_seconds / 60;
-        int ss = total_seconds % 60;
-        return Timestamp(hh, mm, ss);
-    }
-
-    string to_string() const {
-        char buffer[9];
-        snprintf(buffer, sizeof(buffer), "%02d:%02d:%02d", h, m, s);
-        return string(buffer);
-    }
-};
-
-// Функция, которую мы тестируем (скопирована из main.cpp)
-Timestamp calculate_correct_time(const string& A_str, const string& B_str, const string& C_str) {
-    Timestamp A = Timestamp::from_string(A_str);
-    Timestamp B = Timestamp::from_string(B_str);
-    Timestamp C = Timestamp::from_string(C_str);
-
-    const int SECS_IN_DAY = 86400;
-
-    int A_sec = A.to_seconds();
-    int B_sec = B.to_seconds();
-    int C_sec = C.to_seconds();
-
-    int round_trip = (2 * B_sec + (C_sec - A_sec + SECS_IN_DAY) % SECS_IN_DAY);
-    int tm_sec = round_trip / 2 + (round_trip % 2 >= 1 ? 1 : 0);
-
-    return Timestamp::from_seconds(tm_sec);
+int to_seconds(const string& t) {
+    int h = stoi(t.substr(0, 2));
+    int m = stoi(t.substr(3, 2));
+    int s = stoi(t.substr(6, 2));
+    return h * 3600 + m * 60 + s;
 }
 
-bool run_tests() {
-    struct TestCase {
-        string A, B, C;
-        string expected;
-    };
+string from_seconds(int sec) {
+    sec %= 86400;
+    if (sec < 0) sec += 86400;
 
-    TestCase tests[] = {
-        // Пример из условия
-        {"15:01:00", "18:09:45", "15:01:40", "18:10:05"},
-        
-        // Тест 1: Задержка нулевая (A == C)
-        {"12:00:00", "12:00:00", "12:00:00", "12:00:00"},
-        
-        // Тест 2: Задержка небольшая, округление вниз
-        {"10:00:00", "10:00:05", "10:00:09", "10:00:07"},
-        
-        // Тест 3: Задержка небольшая, округление вверх
-        {"10:00:00", "10:00:05", "10:00:10", "10:00:08"},
-        
-        // Тест 4: Переход через полночь (B > A, C < A)
-        {"23:59:00", "00:00:00", "00:00:59", "00:00:29"},
-        
-        // Тест 5: Большая задержка, но менее 24 часов
-        {"00:00:00", "12:00:00", "23:59:59", "17:59:59"},
-        
-        // Тест 6: Точное совпадение A и C, но B отличается
-        {"12:00:00", "13:00:00", "12:00:00", "13:00:00"},
-        
-        // Тест 7: Отрицательная разница (C < A), корректировка модулем
-        {"20:00:00", "20:00:10", "19:59:50", "20:00:00"},
-        
-        // Тест 8: Еще один тест с округлением
-        {"10:00:00", "10:00:00", "10:00:01", "10:00:00"},
-        
-        // Тест 9: Почти полные сутки разницы
-        {"00:00:00", "23:59:59", "23:59:59", "23:59:59"}
-    };
+    int h = sec / 3600; sec %= 3600;
+    int m = sec / 60;
+    int s = sec % 60;
 
-    for (size_t i = 0; i < sizeof(tests) / sizeof(tests[0]); ++i) {
-        const TestCase& tc = tests[i];
-        Timestamp result = calculate_correct_time(tc.A, tc.B, tc.C);
-        if (result.to_string() != tc.expected) {
-            cerr << "Test " << (i + 1) << " FAILED\n";
-            cerr << "Input: A=" << tc.A << " B=" << tc.B << " C=" << tc.C << "\n";
-            cerr << "Expected: " << tc.expected << "\n";
-            cerr << "Got: " << result.to_string() << "\n";
-            return false;
-        }
-    }
+    char buf[20];
+    sprintf(buf, "%02d:%02d:%02d", h, m, s);
+    return string(buf);
+}
 
-    return true;
+/// Верный SNTP ответ
+string correct_answer(const string& A, const string& B, const string& C) {
+    const int DAY = 86400;
+
+    int a = to_seconds(A);
+    int b = to_seconds(B);
+    int c = to_seconds(C);
+
+    int trip = (c - a + DAY) % DAY;      // длительность запроса < 24ч
+    int server_time = b + trip / 2;
+
+    // округление по правилам математики
+    if (trip % 2 == 1) server_time += 1;
+
+    return from_seconds(server_time);
+}
+
+string run_program(const string& input) {
+    ofstream fin("input.txt");
+    fin << input;
+    fin.close();
+
+    system("g++ -std=c++11 -w main.cpp -o main.out");
+    system("./main.out < input.txt > output.txt");
+
+    ifstream fout("output.txt");
+    string out;
+    getline(fout, out);
+    fout.close();
+    return out;
+}
+
+void test_case(int id, const string& A, const string& B, const string& C) {
+    string input = A + "\n" + B + "\n" + C + "\n";
+
+    string expected = correct_answer(A, B, C);
+    string got = run_program(input);
+
+    cout << "Test " << id << ": expected=" << expected << ", got=" << got << "\n";
+
+    assert(got == expected);
 }
 
 int main() {
-    if (run_tests()) {
-        return 0; // Успех
-    } else {
-        return 1; // Ошибка
-    }
+    cout << "Running SNTP tests...\n\n";
+
+    test_case(1, "10:00:00", "10:00:10", "10:00:20");
+    test_case(2, "00:00:00", "00:00:01", "00:00:02");
+    test_case(3, "23:59:50", "12:00:00", "00:00:10");
+    test_case(4, "18:00:00", "20:00:00", "02:00:00");
+    test_case(5, "00:00:00", "00:00:00", "00:00:01");
+    test_case(6, "13:37:42", "15:20:10", "17:02:38");
+    test_case(7, "01:00:00", "02:00:01", "03:00:02");
+    test_case(8, "23:10:10", "05:05:05", "23:10:20");
+    test_case(9, "12:00:00", "12:00:00", "11:59:59");
+
+    cout << "\nAll tests passed!\n";
+    return 0;
 }

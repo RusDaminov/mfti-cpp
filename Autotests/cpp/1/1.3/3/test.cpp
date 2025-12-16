@@ -1,51 +1,81 @@
 #include <iostream>
-#include <cmath> // для M_PI и pow
+#include <fstream>
+#include <cstdlib>
+#include <cmath>
+#include <sstream>
+#include <string>
 using namespace std;
 
-// Функция для вычисления объёма шара
-double sphere_volume(double r) {
-    return (4.0 / 3.0) * M_PI * pow(r, 3);
-}
-
-// Автотесты
-void run_tests() {
-    double eps = 1e-9;
-
-    // Тест 1: радиус 3
-    double v1 = sphere_volume(3.0);
-    double expected1 = (4.0 / 3.0) * M_PI * 27.0; // 4/3 * π * 27
-    if (fabs(v1 - expected1) < eps) {
-        cout << "✅ Тест 1 пройден" << endl;
-    } else {
-        cout << "❌ Тест 1 не пройден (ожидалось " << expected1 << ", получено " << v1 << ")" << endl;
-    }
-
-    // Тест 2: радиус 0
-    double v2 = sphere_volume(0.0);
-    if (fabs(v2 - 0.0) < eps) {
-        cout << "✅ Тест 2 пройден" << endl;
-    } else {
-        cout << "❌ Тест 2 не пройден (ожидалось 0, получено " << v2 << ")" << endl;
-    }
-
-    // Тест 3: радиус 1
-    double v3 = sphere_volume(1.0);
-    double expected3 = (4.0 / 3.0) * M_PI;
-    if (fabs(v3 - expected3) < eps) {
-        cout << "✅ Тест 3 пройден" << endl;
-    } else {
-        cout << "❌ Тест 3 не пройден (ожидалось " << expected3 << ", получено " << v3 << ")" << endl;
-    }
+// Функция для чтения всего файла в строку
+string readFile(const string& filename) {
+    ifstream file(filename);
+    stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
 }
 
 int main() {
-    run_tests();
+    // === 1. Проверка наличия корректной формулы ===
+    string code = readFile("main.cpp");
 
-    double r = 3.0;
-    double V = sphere_volume(r);
+    bool hasCorrectFormula = (
+        code.find("(4.0 / 3.0)") != string::npos ||
+        code.find("(4.0/3.0)") != string::npos ||
+        code.find("(4 / 3)") != string::npos
+    );
 
-    cout.precision(15); // точность вывода
-    cout << "Объём шара: " << fixed << V << endl;
+    if (!hasCorrectFormula) {
+        cerr << "❌ Ошибка: неверная формула. Ожидалось (4.0 / 3.0) * M_PI * pow(r, 3)" << endl;
+        return 1;
+    }
 
+    cout << "✅ Формула найдена корректно" << endl;
+
+    // === 2. Компиляция main.cpp ===
+    int compileStatus = system("g++ -std=c++11 -w main.cpp -o main");
+    if (compileStatus != 0) {
+        cerr << "❌ Ошибка компиляции main.cpp" << endl;
+        return 1;
+    }
+    cout << "✅ Компиляция прошла успешно" << endl;
+
+    // === 3. Запуск и проверка результата ===
+    FILE* pipe = popen("./main", "r");
+    if (!pipe) {
+        cerr << "❌ Не удалось запустить main" << endl;
+        return 1;
+    }
+
+    char buffer[256];
+    string output;
+    while (fgets(buffer, sizeof(buffer), pipe) != nullptr)
+        output += buffer;
+    pclose(pipe);
+
+    cout << "Вывод программы:\n" << output << endl;
+
+    // === 4. Проверка значения ===
+    double expected = (4.0 / 3.0) * M_PI * pow(3.0, 3);
+    double found = 0.0;
+
+    // Ищем число в выводе
+    stringstream ss(output);
+    string word;
+    while (ss >> word) {
+        try {
+            found = stod(word);
+            break;
+        } catch (...) {}
+    }
+
+    double diff = fabs(found - expected);
+    if (diff < 1e-6)
+        cout << "✅ Результат корректный: " << found << endl;
+    else {
+        cerr << "❌ Ошибка в результате. Ожидалось " << expected << ", получено " << found << endl;
+        return 1;
+    }
+
+    cout << "🎯 Тест пройден успешно!" << endl;
     return 0;
 }

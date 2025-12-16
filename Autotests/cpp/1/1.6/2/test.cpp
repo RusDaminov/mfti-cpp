@@ -1,92 +1,212 @@
 #include <iostream>
-#include <fstream>
-#include <sstream>
 #include <string>
 #include <vector>
 #include <cstdlib>
+#include <fstream>
+#include <sstream>
 
-// Функция для запуска программы с входными данными и получения результата
-std::string runProgram(const std::string& program, const std::string& input) {
-    // Записываем входные данные в файл
-    std::ofstream inputFile("input.txt");
-    inputFile << input;
-    inputFile.close();
-    
-    // Запускаем программу
-    std::string command = program + " < input.txt > output.txt";
-    system(command.c_str());
-    
-    // Читаем результат
-    std::ifstream outputFile("output.txt");
-    std::string result;
-    std::getline(outputFile, result);
-    outputFile.close();
-    
-    return result;
-}
+#ifdef _WIN32
+    #include <windows.h>
+    #define CLEAR_SCREEN "cls"
+#else
+    #include <unistd.h>
+    #include <sys/wait.h>
+    #define CLEAR_SCREEN "clear"
+#endif
 
-// Функция для вычисления ожидаемого результата по формуле
-long long calculateExpected(int n, int m) {
-    long long x_pairs = (long long)n * (n + 1) / 2;
-    long long y_pairs = (long long)m * (m + 1) / 2;
-    return x_pairs * y_pairs;
-}
-
-// Функция для тестирования одной программы
-void testProgram(const std::string& programName, const std::vector<std::pair<int, int>>& testCases) {
-    std::cout << "Тестирование " << programName << ":\n";
-    std::cout << "========================================\n";
+class Tester {
+private:
+    std::string compiler;
     
-    int passed = 0;
-    int total = testCases.size();
-    
-    for (size_t i = 0; i < testCases.size(); ++i) {
-        int n = testCases[i].first;
-        int m = testCases[i].second;
-        
-        std::stringstream input;
-        input << n << " " << m;
-        
-        std::string resultStr = runProgram(programName, input.str());
-        long long result = std::stoll(resultStr);
-        long long expected = calculateExpected(n, m);
-        
-        std::cout << "Тест " << (i + 1) << ": N=" << n << ", M=" << m << "\n";
-        std::cout << "  Ожидаемый результат: " << expected << "\n";
-        std::cout << "  Полученный результат: " << result << "\n";
-        
-        if (result == expected) {
-            std::cout << "  ✓ ПРОЙДЕН\n";
-            passed++;
-        } else {
-            std::cout << "  ✗ НЕ ПРОЙДЕН\n";
-        }
-        std::cout << "----------------------------------------\n";
+public:
+    Tester() {
+        #ifdef _WIN32
+            compiler = "g++";
+        #else
+            compiler = "g++";
+        #endif
     }
     
-    std::cout << "Итог: " << passed << "/" << total << " тестов пройдено\n";
-    std::cout << "========================================\n\n";
-}
+    bool compile(const std::string& sourceFile, const std::string& outputFile) {
+        std::string command = compiler + " -std=c++11 -o " + outputFile + " " + sourceFile;
+        std::cout << "Компиляция: " << command << std::endl;
+        
+        int result = system(command.c_str());
+        return (result == 0);
+    }
+    
+    bool runTest(const std::string& program, const std::string& input, std::string& output) {
+        #ifdef _WIN32
+            // Windows implementation
+            SECURITY_ATTRIBUTES sa;
+            sa.nLength = sizeof(sa);
+            sa.bInheritHandle = TRUE;
+            sa.lpSecurityDescriptor = NULL;
+            
+            HANDLE hStdoutRead, hStdoutWrite;
+            CreatePipe(&hStdoutRead, &hStdoutWrite, &sa, 0);
+            SetHandleInformation(hStdoutRead, HANDLE_FLAG_INHERIT, 0);
+            
+            HANDLE hStdinRead, hStdinWrite;
+            CreatePipe(&hStdinRead, &hStdinWrite, &sa, 0);
+            SetHandleInformation(hStdinWrite, HANDLE_FLAG_INHERIT, 0);
+            
+            PROCESS_INFORMATION pi;
+            STARTUPINFO si;
+            ZeroMemory(&si, sizeof(si));
+            si.cb = sizeof(si);
+            si.dwFlags = STARTF_USESTDHANDLES;
+            si.hStdInput = hStdinRead;
+            si.hStdOutput = hStdoutWrite;
+            si.hStdError = hStdoutWrite;
+            
+            std::string cmd = program + ".exe";
+            BOOL success = CreateProcess(NULL, const_cast<LPSTR>(cmd.c_str()), NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+            
+            if (!success) {
+                std::cerr << "Ошибка запуска программы" << std::endl;
+                return false;
+            }
+            
+            DWORD written;
+            WriteFile(hStdinWrite, input.c_str(), input.length(), &written, NULL);
+            CloseHandle(hStdinWrite);
+            
+            CloseHandle(hStdoutWrite);
+            
+            WaitForSingleObject(pi.hProcess, INFINITE);
+            
+            char buffer[4096];
+            DWORD read;
+            output.clear();
+            while (ReadFile(hStdoutRead, buffer, sizeof(buffer) - 1, &read, NULL) && read > 0) {
+                buffer[read] = '\0';
+                output += buffer;
+            }
+            
+            CloseHandle(pi.hProcess);
+            CloseHandle(pi.hThread);
+            CloseHandle(hStdoutRead);
+            CloseHandle(hStdinRead);
+            
+        #else
+            // Unix/Linux implementation
+            int stdin_pipe[2], stdout_pipe[2];
+            pipe(stdin_pipe);
+            pipe(stdout_pipe);
+            
+            pid_t pid = fork();
+            
+            if (pid == 0) {
+                // Child process
+                close(stdin_pipe[1]);
+                close(stdout_pipe[0]);
+                
+                dup2(stdin_pipe[0], STDIN_FILENO);
+                dup2(stdout_pipe[1], STDOUT_FILENO);
+                dup2(stdout_pipe[1], STDERR_FILENO);
+                
+                close(stdin_pipe[0]);
+                close(stdout_pipe[1]);
+                
+                execl(program.c_str(), program.c_str(), NULL);
+                exit(1);
+            } else {
+                // Parent process
+                close(stdin_pipe[0]);
+                close(stdout_pipe[1]);
+                
+                write(stdin_pipe[1], input.c_str(), input.length());
+                close(stdin_pipe[1]);
+                
+                char buffer[4096];
+                output.clear();
+                ssize_t count;
+                while ((count = read(stdout_pipe[0], buffer, sizeof(buffer) - 1)) > 0) {
+                    buffer[count] = '\0';
+                    output += buffer;
+                }
+                
+                close(stdout_pipe[0]);
+                waitpid(pid, NULL, 0);
+            }
+        #endif
+        
+        // Убираем лишние пробелы и переводы строк
+        size_t pos = output.find_last_not_of(" \n\r\t");
+        if (pos != std::string::npos) {
+            output = output.substr(0, pos + 1);
+        }
+        
+        return true;
+    }
+    
+    void runTests() {
+        std::vector<std::pair<std::string, std::string>> testCases = {
+            {"123", "131"},
+            {"1", "2"},
+            {"9", "11"},
+            {"99", "101"},
+            {"808", "818"},
+            {"2133", "2222"},
+            {"899", "909"},
+            {"999", "1001"}
+        };
+        
+        std::cout << "Запуск тестов для задачи 'Следующий палиндром':\n";
+        std::cout << "=============================================\n";
+        
+        int passed = 0;
+        int total = testCases.size();
+        
+        for (size_t i = 0; i < testCases.size(); i++) {
+            std::string input = testCases[i].first;
+            std::string expected = testCases[i].second;
+            std::string actual;
+            
+            std::cout << "Тест " << (i + 1) << ": Вход = " << input;
+            std::cout << ", Ожидается = " << expected;
+            
+            if (runTest("main", input, actual)) {
+                std::cout << ", Получено = " << actual;
+                
+                if (actual == expected) {
+                    std::cout << " ✓ ПРОЙДЕН" << std::endl;
+                    passed++;
+                } else {
+                    std::cout << " ✗ НЕ ПРОЙДЕН" << std::endl;
+                }
+            } else {
+                std::cout << " ✗ ОШИБКА ВЫПОЛНЕНИЯ" << std::endl;
+            }
+        }
+        
+        std::cout << "=============================================\n";
+        std::cout << "Результат: " << passed << "/" << total << " тестов пройдено\n";
+        
+        if (passed == total) {
+            std::cout << "✓ Все тесты пройдены успешно!" << std::endl;
+        } else {
+            std::cout << "✗ Некоторые тесты не пройдены" << std::endl;
+        }
+    }
+};
 
 int main() {
-    // Тестовые случаи
-    std::vector<std::pair<int, int>> testCases = {
-        {2, 2},    // Должно быть 9
-        {2, 3},    // Должно быть 18
-        {3, 2},    // Должно быть 18  
-        {3, 3},    // Должно быть 36
-        {1, 1},    // Должно быть 1
-        {1, 5},    // Должно быть 15
-        {5, 1},    // Должно быть 15
-        {10, 10},  // Должно быть 3025
-        {100, 100},// Должно быть 25502500
-        {75000, 1} // Крайний случай
-    };
+    system(CLEAR_SCREEN);
     
-    // Тестируем разные версии программ
-    testProgram("./main_slow", testCases);    // 4-цикловая версия (40 баллов)
-    testProgram("./main_medium", testCases);  // 2-цикловая версия (70 баллов)  
-    testProgram("./main_fast", testCases);    // O(1) версия (100 баллов)
+    Tester tester;
+    
+    // Компилируем main.cpp
+    if (!tester.compile("main.cpp", "main")) {
+        std::cerr << "Ошибка компиляции main.cpp!" << std::endl;
+        return 1;
+    }
+    
+    std::cout << "Компиляция успешна!\n" << std::endl;
+    
+    // Запускаем тесты
+    tester.runTests();
     
     return 0;
 }

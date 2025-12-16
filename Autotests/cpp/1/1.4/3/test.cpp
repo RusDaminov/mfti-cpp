@@ -1,80 +1,98 @@
 #include <iostream>
+#include <fstream>
+#include <sstream>
 #include <string>
+#include <vector>
+#include <cstdlib>
+#include <algorithm> // для std::remove
 using namespace std;
 
-// Функция для построения пути
-string build_path(int x1, int y1, int x2, int y2) {
-    string path;
+// Кроссплатформенное имя исполняемого файла
+#ifdef _WIN32
+const string exeName = "main.exe";
+#else
+const string exeName = "main";
+#endif
 
-    // Движение по X
-    if (x2 > x1) {
-        path.append(x2 - x1, 'E');
-    } else {
-        path.append(x1 - x2, 'W');
+// Структура теста
+struct TestCase {
+    string input;
+    string expected;
+    string comment;
+};
+
+// Функция для запуска программы и получения вывода
+string runProgram(const string& input) {
+    // создаём input.txt
+    ofstream fin("input.txt");
+    fin << input;
+    fin.close();
+
+    // компиляция main.cpp
+    string compileCmd = "g++ -std=c++11 -w main.cpp -o " + exeName;
+    int compileResult = system(compileCmd.c_str());
+    if (compileResult != 0) {
+        cerr << "❌ Ошибка компиляции main.cpp" << endl;
+        exit(1);
     }
 
-    // Движение по Y
-    if (y2 > y1) {
-        path.append(y2 - y1, 'N');
-    } else {
-        path.append(y1 - y2, 'S');
+    // запуск с redirection
+#ifdef _WIN32
+    string runCmd = exeName + " < input.txt > output.txt";
+#else
+    string runCmd = "./" + exeName + " < input.txt > output.txt";
+#endif
+    int runResult = system(runCmd.c_str());
+    if (runResult != 0) {
+        cerr << "❌ Ошибка при запуске программы" << endl;
+        exit(1);
     }
 
-    return path;
-}
+    // читаем вывод
+    ifstream fout("output.txt");
+    stringstream buffer;
+    buffer << fout.rdbuf();
+    fout.close();
+    string output = buffer.str();
 
-// Автотесты
-void run_tests() {
-    string res;
+    // Удаляем переводы строк и пробелы
+    output.erase(std::remove(output.begin(), output.end(), '\n'), output.end());
+    output.erase(std::remove(output.begin(), output.end(), '\r'), output.end());
+    output.erase(std::remove(output.begin(), output.end(), ' '), output.end());
 
-    // Тест 1: вправо и вверх
-    res = build_path(0, 0, 2, 3);
-    if (res == "EENN N") // 2 раза E и 3 раза N
-        cout << "✅ Тест 1 пройден" << endl;
-    else
-        cout << "❌ Тест 1 не пройден (ожидалось EENN N, получено " << res << ")" << endl;
-
-    // Тест 2: влево и вниз
-    res = build_path(5, 5, 2, 3);
-    if (res == "WWWSS") // 3 раза W и 2 раза S
-        cout << "✅ Тест 2 пройден" << endl;
-    else
-        cout << "❌ Тест 2 не пройден (ожидалось WWWSS, получено " << res << ")" << endl;
-
-    // Тест 3: только по X
-    res = build_path(1, 1, 4, 1);
-    if (res == "EEE")
-        cout << "✅ Тест 3 пройден" << endl;
-    else
-        cout << "❌ Тест 3 не пройден (ожидалось EEE, получено " << res << ")" << endl;
-
-    // Тест 4: только по Y
-    res = build_path(2, 7, 2, 4);
-    if (res == "SSS")
-        cout << "✅ Тест 4 пройден" << endl;
-    else
-        cout << "❌ Тест 4 не пройден (ожидалось SSS, получено " << res << ")" << endl;
-
-    // Тест 5: та же точка
-    res = build_path(3, 3, 3, 3);
-    if (res == "")
-        cout << "✅ Тест 5 пройден" << endl;
-    else
-        cout << "❌ Тест 5 не пройден (ожидалось пусто, получено " << res << ")" << endl;
+    return output;
 }
 
 int main() {
-    run_tests();
+    vector<TestCase> tests = {
+        {"0\n0\n3\n4\n", "EEENNNN", "Простой случай"},
+        {"5\n5\n5\n5\n", "", "Начало и конец совпадают"},
+        {"2\n7\n-1\n3\n", "WWWSSSS", "Отрицательное движение"},
+        {"-3\n0\n0\n5\n", "EEENNNNN", "С отрицательными координатами"},
+        {"10\n10\n10\n0\n", "SSSSSSSSSS", "Только вертикальное движение"}
+    };
 
-    int x1, y1, x2, y2;
-    cin >> x1 >> y1 >> x2 >> y2;
+    cout << "=== ТЕСТИРОВАНИЕ ЗАДАЧИ «МАНХЭТТЕН» ===" << endl;
 
-    string path = build_path(x1, y1, x2, y2);
+    int passed = 0;
+    for (size_t i = 0; i < tests.size(); ++i) {
+        cout << "\nТест #" << (i + 1) << ": " << tests[i].comment << endl;
 
-    // Вывод по шагам, как в твоём коде
-    for (char c : path) {
-        cout << c << "\n";
+        string result = runProgram(tests[i].input);
+
+        if (result == tests[i].expected) {
+            cout << "✅ Пройден. Вывод: " << (result.empty() ? "(пусто)" : result) << endl;
+            passed++;
+        } else {
+            cout << "❌ Провален." << endl;
+            cout << "   Ожидалось: \"" << tests[i].expected << "\"" << endl;
+            cout << "   Получено:   \"" << result << "\"" << endl;
+        }
     }
+
+    cout << "\n==============================" << endl;
+    cout << "Пройдено тестов: " << passed << " из " << tests.size() << endl;
+    cout << "==============================" << endl;
 
     return 0;
 }

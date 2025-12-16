@@ -1,0 +1,7 @@
+6
+ADD first
+ADD second
+RUN
+ADD third
+RUN
+RUN
