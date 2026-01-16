@@ -1,0 +1,3 @@
+Permutations P(4) = 24
+Arrangements A(4, 5) = 0
+Combinations C(4, 5) = 0
